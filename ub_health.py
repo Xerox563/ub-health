@@ -3,6 +3,7 @@
 
 import argparse
 import datetime
+import subprocess
 from dataclasses import dataclass, field
 
 VERSION = "0.1.0"
@@ -21,6 +22,31 @@ class Result:
     message: str
     fix: str = ""
     fix_command: list = field(default_factory=list)
+
+
+def parse_upgradable(text):
+    """Return the package names from `apt list --upgradable` output."""
+    names = []
+    for line in text.splitlines():
+        if "[upgradable" in line and "/" in line:
+            names.append(line.split("/", 1)[0])
+    return names
+
+
+def check_updates(apt_output=None):
+    """Report how many packages can be upgraded."""
+    if apt_output is None:
+        apt_output = subprocess.run(
+            ["apt", "list", "--upgradable"],
+            capture_output=True, text=True,
+        ).stdout
+    count = len(parse_upgradable(apt_output))
+    if count == 0:
+        return Result("Updates", OK, "Everything is up to date")
+    return Result(
+        "Updates", WARN, f"{count} packages can be upgraded",
+        fix="sudo apt update && sudo apt upgrade",
+    )
 
 
 def render_report(results, today=None):
@@ -63,11 +89,7 @@ def build_parser():
 
 def main(argv=None):
     build_parser().parse_args(argv)
-    results = [
-        Result("Updates", WARN, "14 packages can be upgraded",
-               fix="sudo apt update && sudo apt upgrade"),
-        Result("Reboot", OK, "No restart needed"),
-    ]
+    results = [check_updates()]
     print(render_report(results))
     return exit_code(results)
 

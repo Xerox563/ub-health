@@ -167,6 +167,20 @@ CERT_WARN_DAYS = 30
 CERT_FAIL_DAYS = 7
 
 
+CONFIG_PATH = os.path.expanduser("~/.config/ub-health/certs.txt")
+
+
+def load_extra_cert_paths(config_path=CONFIG_PATH):
+    """Read extra certificate paths, one per line. Lines starting with # are ignored."""
+    try:
+        with open(config_path) as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return []
+    return [line.strip() for line in lines
+            if line.strip() and not line.strip().startswith("#")]
+
+
 def read_expiry(path):
     """Return the expiry date of a certificate file, as a UTC datetime."""
     output = subprocess.run(
@@ -183,7 +197,7 @@ def read_expiry(path):
 def check_certificates(paths=None, expiry=read_expiry, now=None):
     """Report certificates that expire soon or have already expired."""
     if paths is None:
-        paths = sorted(glob.glob(LETSENCRYPT_GLOB))
+        paths = sorted(glob.glob(LETSENCRYPT_GLOB)) + load_extra_cert_paths()
     if not paths:
         return Result("Certificates", OK, "No certificates found to check")
     now = now or datetime.datetime.now(datetime.timezone.utc)

@@ -308,7 +308,9 @@ def render_report(results, today=None, color=False):
     if disk:
         lines.append("  " + paint("Disk usage", "1", enabled=color))
         for label, percent, note in disk.details:
-            lines.append(f"    {label:<12} {bar(percent, 24, level_code(percent), color)}"
+            if len(label) > 16:
+                label = label[:15] + "…"
+            lines.append(f"    {label:<16} {bar(percent, 24, level_code(percent), color)}"
                          f"  {percent:>3}%  {note}")
         lines.append("")
 

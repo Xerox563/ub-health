@@ -46,8 +46,15 @@ def parse_security(text):
     return names
 
 
-def check_updates(apt_output=None):
+def refresh_package_lists(run=subprocess.run):
+    """Run `apt update` so the upgrade list is current. Asks for sudo if needed."""
+    run(["sudo", "apt", "update"])
+
+
+def check_updates(apt_output=None, refresh=False):
     """Report how many packages can be upgraded, flagging security updates."""
+    if refresh:
+        refresh_package_lists()
     if apt_output is None:
         apt_output = subprocess.run(
             ["apt", "list", "--upgradable"],
@@ -303,6 +310,10 @@ def build_parser():
         help="print the results as JSON for scripts",
     )
     parser.add_argument(
+        "--refresh", action="store_true",
+        help="run apt update first so the update check is current",
+    )
+    parser.add_argument(
         "--fix", action="store_true",
         help="offer each fix and run it only after you say yes",
     )
@@ -314,7 +325,8 @@ def main(argv=None):
     if not is_ubuntu():
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3
-    results = [check_updates(), check_reboot(), check_services(), check_disk(),
+    results = [check_updates(refresh=args.refresh), check_reboot(), check_services(),
+               check_disk(),
                check_certificates()]
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))

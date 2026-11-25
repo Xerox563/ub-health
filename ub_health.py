@@ -3,6 +3,7 @@
 
 import argparse
 import datetime
+import os
 import subprocess
 from dataclasses import dataclass, field
 
@@ -63,6 +64,25 @@ def check_updates(apt_output=None):
     return Result("Updates", OK, "Everything is up to date")
 
 
+REBOOT_FLAG = "/var/run/reboot-required"
+REBOOT_PACKAGES = "/var/run/reboot-required.pkgs"
+
+
+def check_reboot(flag_path=REBOOT_FLAG, packages_path=REBOOT_PACKAGES):
+    """Report whether a restart is needed after an update."""
+    if not os.path.exists(flag_path):
+        return Result("Reboot", OK, "No restart needed")
+    message = "A restart is needed to finish installing updates"
+    try:
+        with open(packages_path) as handle:
+            packages = sorted({line.strip() for line in handle if line.strip()})
+        if packages:
+            message += f" (for {', '.join(packages[:3])})"
+    except OSError:
+        pass
+    return Result("Reboot", FAIL, message, fix="sudo reboot")
+
+
 def render_report(results, today=None):
     """Turn a list of results into the one screen text report."""
     today = today or datetime.date.today()
@@ -103,7 +123,7 @@ def build_parser():
 
 def main(argv=None):
     build_parser().parse_args(argv)
-    results = [check_updates()]
+    results = [check_updates(), check_reboot()]
     print(render_report(results))
     return exit_code(results)
 

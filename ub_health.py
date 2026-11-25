@@ -36,6 +36,8 @@ class Result:
     message: str
     fix: str = ""
     fix_command: list = field(default_factory=list)
+    # Rows for charts, as (label, percent used, note). Empty when there is nothing to chart.
+    details: list = field(default_factory=list)
 
 
 def parse_upgradable(text):
@@ -157,6 +159,7 @@ def check_disk(mounts_text=None, usage=shutil.disk_usage):
         except OSError:
             return Result("Disk", WARN, "Could not read the list of drives")
     worst = None
+    details = []
     for mount in parse_real_mounts(mounts_text):
         try:
             total, used, free = usage(mount)
@@ -165,6 +168,7 @@ def check_disk(mounts_text=None, usage=shutil.disk_usage):
         if not total:
             continue
         percent = used * 100 // total
+        details.append((mount, percent, f"{free / 1_000_000_000:.1f} GB free"))
         if worst is None or percent > worst[1]:
             worst = (mount, percent, free)
     if worst is None:
@@ -174,10 +178,10 @@ def check_disk(mounts_text=None, usage=shutil.disk_usage):
     message = f"{mount} is {percent}% full ({free_gb:.1f} GB free)"
     fix = "sudo apt autoremove && sudo apt clean"
     if percent >= DISK_FAIL_PERCENT:
-        return Result("Disk", FAIL, message, fix=fix)
+        return Result("Disk", FAIL, message, fix=fix, details=details)
     if percent >= DISK_WARN_PERCENT:
-        return Result("Disk", WARN, message, fix=fix)
-    return Result("Disk", OK, message)
+        return Result("Disk", WARN, message, fix=fix, details=details)
+    return Result("Disk", OK, message, details=details)
 
 
 LETSENCRYPT_GLOB = "/etc/letsencrypt/live/*/cert.pem"

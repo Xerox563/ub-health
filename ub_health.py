@@ -257,6 +257,20 @@ def exit_code(results):
     return 0
 
 
+def is_ubuntu(os_release_text=None):
+    """Return True when /etc/os-release says this is Ubuntu."""
+    if os_release_text is None:
+        try:
+            with open("/etc/os-release") as handle:
+                os_release_text = handle.read()
+        except OSError:
+            return False
+    for line in os_release_text.splitlines():
+        if line.startswith("ID="):
+            return line.split("=", 1)[1].strip().strip('"') == "ubuntu"
+    return False
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="ub-health",
@@ -270,6 +284,9 @@ def build_parser():
 
 def main(argv=None):
     build_parser().parse_args(argv)
+    if not is_ubuntu():
+        print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
+        return 3
     results = [check_updates(), check_reboot(), check_services(), check_disk(),
                check_certificates()]
     print(render_report(results))

@@ -4,6 +4,7 @@
 import argparse
 import datetime
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 
@@ -113,6 +114,53 @@ def check_services(systemctl_output=None):
     )
 
 
+REAL_FILESYSTEMS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "f2fs", "vfat", "zfs"}
+DISK_WARN_PERCENT = 80
+DISK_FAIL_PERCENT = 90
+
+
+def parse_real_mounts(text):
+    """Return mount points of real drives from /proc/mounts style text."""
+    mounts = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[2] in REAL_FILESYSTEMS and parts[1] not in mounts:
+            mounts.append(parts[1])
+    return mounts
+
+
+def check_disk(mounts_text=None, usage=shutil.disk_usage):
+    """Report the fullest real drive, warning when it is getting full."""
+    if mounts_text is None:
+        try:
+            with open("/proc/mounts") as handle:
+                mounts_text = handle.read()
+        except OSError:
+            return Result("Disk", WARN, "Could not read the list of drives")
+    worst = None
+    for mount in parse_real_mounts(mounts_text):
+        try:
+            total, used, free = usage(mount)
+        except OSError:
+            continue
+        if not total:
+            continue
+        percent = used * 100 // total
+        if worst is None or percent > worst[1]:
+            worst = (mount, percent, free)
+    if worst is None:
+        return Result("Disk", WARN, "Could not check any drives")
+    mount, percent, free = worst
+    free_gb = free / 1_000_000_000
+    message = f"{mount} is {percent}% full ({free_gb:.1f} GB free)"
+    fix = "sudo apt autoremove && sudo apt clean"
+    if percent >= DISK_FAIL_PERCENT:
+        return Result("Disk", FAIL, message, fix=fix)
+    if percent >= DISK_WARN_PERCENT:
+        return Result("Disk", WARN, message, fix=fix)
+    return Result("Disk", OK, message)
+
+
 def render_report(results, today=None):
     """Turn a list of results into the one screen text report."""
     today = today or datetime.date.today()
@@ -153,7 +201,7 @@ def build_parser():
 
 def main(argv=None):
     build_parser().parse_args(argv)
-    results = [check_updates(), check_reboot(), check_services()]
+    results = [check_updates(), check_reboot(), check_services(), check_disk()]
     print(render_report(results))
     return exit_code(results)
 

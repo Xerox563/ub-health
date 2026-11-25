@@ -252,21 +252,62 @@ def check_certificates(paths=None, expiry=read_expiry, now=None):
     return Result("Certificates", OK, f"Soonest expiry is in {days} days{note}")
 
 
-def render_report(results, today=None):
-    """Turn a list of results into the one screen text report."""
+WIDTH = 64
+
+
+def level_code(percent):
+    """Green when fine, yellow when getting full, red when critical."""
+    if percent >= DISK_FAIL_PERCENT:
+        return "31"
+    if percent >= DISK_WARN_PERCENT:
+        return "33"
+    return "32"
+
+
+def render_report(results, today=None, color=False):
+    """Build the one screen dashboard: a header, a health bar and a status card per check."""
     today = today or datetime.date.today()
-    lines = [f"Ubuntu Health Check, {today:%d %b %Y}", ""]
-    for result in results:
-        lines.append(f"[{result.status:<4}] {result.name}: {result.message}")
-        if result.fix and result.status != OK:
-            lines.append(f"       Fix: {result.fix}")
+    inner = WIDTH - 2
+    title = f"Ubuntu Health Check  ·  {today:%d %b %Y}"
+    lines = [
+        paint("╭" + "─" * inner + "╮", "36", enabled=color),
+        paint("│", "36", enabled=color) + " " + paint(title, "1", enabled=color)
+        + " " * (inner - 1 - len(title)) + paint("│", "36", enabled=color),
+        paint("╰" + "─" * inner + "╯", "36", enabled=color),
+        "",
+    ]
+
+    total = len(results)
+    ok_count = sum(1 for r in results if r.status == OK)
+    health = ok_count * 100 // total if total else 100
+    health_code = "32" if health >= 80 else "33" if health >= 50 else "31"
+    lines.append(f"  Health  {bar(health, 30, health_code, color)}  {health}%")
+    lines.append(paint(f"          {ok_count} of {total} checks are OK", "2", enabled=color))
     lines.append("")
-    problems = sum(1 for r in results if r.status != OK)
+
+    for result in results:
+        icon = paint(ICONS[result.status], COLORS[result.status], "1", enabled=color)
+        name = paint(f"{result.name:<13}", "1", enabled=color)
+        lines.append(f"  {icon} {name} {result.message}")
+        if result.fix and result.status != OK:
+            lines.append("      " + paint(f"→ Fix: {result.fix}", "2", enabled=color))
+    lines.append("")
+
+    problems = total - ok_count
     if problems:
-        lines.append(f"{problems} item(s) need attention.")
+        summary = f"{problems} item(s) need attention."
+        lines.append("  " + paint(summary, "33" if problems else "32", enabled=color))
     else:
-        lines.append("Everything looks good.")
+        lines.append("  " + paint("Everything looks good.", "32", enabled=color))
     return "\n".join(lines)
+
+
+def bar(percent, width=30, code="32", color=False):
+    """A horizontal bar: filled blocks for the percent, light blocks for the rest."""
+    percent = max(0, min(100, percent))
+    filled = round(percent * width / 100)
+    return (paint("█" * filled, code, enabled=color)
+            + paint("░" * (width - filled), "2", enabled=color))
 
 
 def exit_code(results):

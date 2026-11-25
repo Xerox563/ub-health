@@ -40,6 +40,16 @@ def render_report(results, today=None):
     return "\n".join(lines)
 
 
+def exit_code(results):
+    """0 when all OK, 1 when there are warnings, 2 when there are failures."""
+    statuses = {r.status for r in results}
+    if FAIL in statuses:
+        return 2
+    if WARN in statuses:
+        return 1
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="ub-health",
@@ -59,7 +69,8 @@ def main(argv=None):
         Result("Reboot", OK, "No restart needed"),
     ]
     print(render_report(results))
+    return exit_code(results)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

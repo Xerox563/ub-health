@@ -16,6 +16,16 @@ OK = "OK"
 WARN = "WARN"
 FAIL = "FAIL"
 
+ICONS = {OK: "✔", WARN: "⚠", FAIL: "✖"}
+COLORS = {OK: "32", WARN: "33", FAIL: "31"}
+
+
+def paint(text, *codes, enabled=False):
+    """Wrap text in terminal color codes, only when colors are turned on."""
+    if not enabled or not codes:
+        return text
+    return f"\033[{';'.join(codes)}m{text}\033[0m"
+
 
 @dataclass
 class Result:

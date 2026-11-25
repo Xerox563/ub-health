@@ -2,8 +2,24 @@
 """ub-health: a plain English health check for Ubuntu."""
 
 import argparse
+from dataclasses import dataclass, field
 
 VERSION = "0.1.0"
+
+OK = "OK"
+WARN = "WARN"
+FAIL = "FAIL"
+
+
+@dataclass
+class Result:
+    """The outcome of one check."""
+
+    name: str
+    status: str
+    message: str
+    fix: str = ""
+    fix_command: list = field(default_factory=list)
 
 
 def build_parser():
@@ -19,8 +35,8 @@ def build_parser():
 
 def main(argv=None):
     build_parser().parse_args(argv)
-    print("Ubuntu Health Check")
-    print("Checks are not added yet.")
+    example = Result("Example", OK, "Nothing to check yet.")
+    print(f"[{example.status}] {example.name}: {example.message}")
 
 
 if __name__ == "__main__":

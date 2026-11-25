@@ -42,8 +42,11 @@ ub-health            # full one-screen report
 ub-health --json     # same results as JSON, for scripts
 ub-health --refresh  # run apt update first so the update check is current
 ub-health --fix      # offer each fix and run it only after you say yes
+ub-health --plain    # no colors, good for logs and copy and paste
 ub-health --help     # list all options
 ```
+
+In a terminal, the report is a colored dashboard with a health bar, a status card for each check, disk usage bars and a check mix bar. Colors turn off automatically when the output is piped or when the `NO_COLOR` environment variable is set.
 
 Some checks need sudo to read everything. If a check cannot read something, it tells you to run `sudo ub-health`.
 

@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import asdict, dataclass, field
 
 VERSION = "0.1.0"
@@ -400,6 +401,10 @@ def build_parser():
         "--fix", action="store_true",
         help="offer each fix and run it only after you say yes",
     )
+    parser.add_argument(
+        "--plain", action="store_true",
+        help="no colors, for logs and copy and paste",
+    )
     return parser
 
 
@@ -414,7 +419,9 @@ def main(argv=None):
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))
     else:
-        print(render_report(results))
+        # Colors only when printing to a real terminal, and never when NO_COLOR is set.
+        color = sys.stdout.isatty() and not args.plain and "NO_COLOR" not in os.environ
+        print(render_report(results, color=color))
     if args.fix:
         run_fixes(results)
     return exit_code(results)

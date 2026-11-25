@@ -293,6 +293,21 @@ def render_report(results, today=None, color=False):
             lines.append("      " + paint(f"→ Fix: {result.fix}", "2", enabled=color))
     lines.append("")
 
+    disk = next((r for r in results if r.name == "Disk" and r.details), None)
+    if disk:
+        lines.append("  " + paint("Disk usage", "1", enabled=color))
+        for label, percent, note in disk.details:
+            lines.append(f"    {label:<12} {bar(percent, 24, level_code(percent), color)}"
+                         f"  {percent:>3}%  {note}")
+        lines.append("")
+
+    counts = {s: sum(1 for r in results if r.status == s) for s in (OK, WARN, FAIL)}
+    lines.append("  " + paint("Check mix", "1", enabled=color))
+    lines.append("    " + stacked_bar(counts, 24, color))
+    lines.append("    " + paint(f"{counts[OK]} OK   {counts[WARN]} WARN   {counts[FAIL]} FAIL",
+                                "2", enabled=color))
+    lines.append("")
+
     problems = total - ok_count
     if problems:
         summary = f"{problems} item(s) need attention."
@@ -300,6 +315,19 @@ def render_report(results, today=None, color=False):
     else:
         lines.append("  " + paint("Everything looks good.", "32", enabled=color))
     return "\n".join(lines)
+
+
+def stacked_bar(counts, width=30, color=False):
+    """One bar split into coloured parts, one part per status."""
+    total = sum(counts.values())
+    if not total:
+        return paint("░" * width, "2", enabled=color)
+    parts = []
+    for status in (OK, WARN, FAIL):
+        size = round(counts[status] * width / total)
+        if size:
+            parts.append(paint("█" * size, COLORS[status], enabled=color))
+    return "".join(parts)
 
 
 def bar(percent, width=30, code="32", color=False):

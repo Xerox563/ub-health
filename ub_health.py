@@ -202,22 +202,32 @@ def check_certificates(paths=None, expiry=read_expiry, now=None):
         return Result("Certificates", OK, "No certificates found to check")
     now = now or datetime.datetime.now(datetime.timezone.utc)
     soonest = None
+    unreadable = 0
     for path in paths:
-        expires = expiry(path)
+        try:
+            expires = expiry(path)
+        except (OSError, subprocess.CalledProcessError):
+            unreadable += 1
+            continue
         if soonest is None or expires < soonest[1]:
             soonest = (path, expires)
+    if soonest is None:
+        return Result("Certificates", WARN,
+                      f"Could not read {unreadable} certificate(s) (run with sudo)",
+                      fix="sudo ub-health")
     path, expires = soonest
     days = (expires - now).days
+    note = f", {unreadable} could not be read (run with sudo)" if unreadable else ""
     if days < 0:
-        message = f"{path} has already expired"
+        message = f"{path} has already expired{note}"
         return Result("Certificates", FAIL, message, fix="sudo certbot renew")
-    message = f"{path} expires in {days} days"
+    message = f"{path} expires in {days} days{note}"
     fix = "sudo certbot renew"
     if days < CERT_FAIL_DAYS:
         return Result("Certificates", FAIL, message, fix=fix)
     if days < CERT_WARN_DAYS:
         return Result("Certificates", WARN, message, fix=fix)
-    return Result("Certificates", OK, f"Soonest expiry is in {days} days")
+    return Result("Certificates", OK, f"Soonest expiry is in {days} days{note}")
 
 
 def render_report(results, today=None):

@@ -272,6 +272,24 @@ def is_ubuntu(os_release_text=None):
     return False
 
 
+def run_fixes(results, ask=input, run=subprocess.run):
+    """Offer each suggested fix and run it only after a clear yes."""
+    offered = set()
+    for result in results:
+        if result.status == OK or not result.fix or result.fix in offered:
+            continue
+        offered.add(result.fix)
+        print(f"\nFix for {result.name}: {result.fix}")
+        try:
+            answer = ask("Run this fix now? [y/N] ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer in ("y", "yes"):
+            run(result.fix, shell=True)
+        else:
+            print("Skipped.")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="ub-health",
@@ -283,6 +301,10 @@ def build_parser():
     parser.add_argument(
         "--json", action="store_true",
         help="print the results as JSON for scripts",
+    )
+    parser.add_argument(
+        "--fix", action="store_true",
+        help="offer each fix and run it only after you say yes",
     )
     return parser
 
@@ -298,6 +320,8 @@ def main(argv=None):
         print(json.dumps([asdict(r) for r in results], indent=2))
     else:
         print(render_report(results))
+    if args.fix:
+        run_fixes(results)
     return exit_code(results)
 
 

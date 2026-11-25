@@ -142,12 +142,22 @@ DISK_FAIL_PERCENT = 90
 
 
 def parse_real_mounts(text):
-    """Return mount points of real drives from /proc/mounts style text."""
+    """Return mount points of real drives from /proc/mounts style text.
+
+    A drive can be mounted in more than one place (for example a Snap bind mount),
+    so each device is listed only once, under its first mount point.
+    """
     mounts = []
+    seen_devices = set()
     for line in text.splitlines():
         parts = line.split()
-        if len(parts) >= 3 and parts[2] in REAL_FILESYSTEMS and parts[1] not in mounts:
-            mounts.append(parts[1])
+        if len(parts) < 3 or parts[2] not in REAL_FILESYSTEMS:
+            continue
+        device, mount = parts[0], parts[1]
+        if device in seen_devices:
+            continue
+        seen_devices.add(device)
+        mounts.append(mount)
     return mounts
 
 

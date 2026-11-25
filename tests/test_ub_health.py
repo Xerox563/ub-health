@@ -73,6 +73,14 @@ class DiskTests(unittest.TestCase):
     def test_ignores_virtual_filesystems(self):
         self.assertEqual(uh.parse_real_mounts(self.MOUNTS), ["/"])
 
+    def test_same_drive_is_listed_once(self):
+        text = (
+            "/dev/nvme0n1p3 / ext4 rw 0 0\n"
+            "/dev/nvme0n1p3 /var/snap/firefox/common/host-hunspell ext4 rw 0 0\n"
+            "/dev/nvme0n1p1 /boot/efi vfat rw 0 0\n"
+        )
+        self.assertEqual(uh.parse_real_mounts(text), ["/", "/boot/efi"])
+
     def test_nearly_full_is_fail(self):
         result = uh.check_disk(self.MOUNTS, usage=lambda p: (100, 95, 5_000_000_000))
         self.assertEqual(result.status, uh.FAIL)

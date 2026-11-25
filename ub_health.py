@@ -4,10 +4,11 @@
 import argparse
 import datetime
 import glob
+import json
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 VERSION = "0.1.0"
 
@@ -279,17 +280,24 @@ def build_parser():
     parser.add_argument(
         "--version", action="version", version=f"ub-health {VERSION}"
     )
+    parser.add_argument(
+        "--json", action="store_true",
+        help="print the results as JSON for scripts",
+    )
     return parser
 
 
 def main(argv=None):
-    build_parser().parse_args(argv)
+    args = build_parser().parse_args(argv)
     if not is_ubuntu():
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3
     results = [check_updates(), check_reboot(), check_services(), check_disk(),
                check_certificates()]
-    print(render_report(results))
+    if args.json:
+        print(json.dumps([asdict(r) for r in results], indent=2))
+    else:
+        print(render_report(results))
     return exit_code(results)
 
 

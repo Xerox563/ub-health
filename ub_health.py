@@ -3,6 +3,7 @@
 
 import argparse
 import datetime
+import glob
 import os
 import shutil
 import subprocess
@@ -161,6 +162,50 @@ def check_disk(mounts_text=None, usage=shutil.disk_usage):
     return Result("Disk", OK, message)
 
 
+LETSENCRYPT_GLOB = "/etc/letsencrypt/live/*/cert.pem"
+CERT_WARN_DAYS = 30
+CERT_FAIL_DAYS = 7
+
+
+def read_expiry(path):
+    """Return the expiry date of a certificate file, as a UTC datetime."""
+    output = subprocess.run(
+        ["openssl", "x509", "-in", path, "-noout", "-enddate"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    # Output looks like: notAfter=Mar 12 08:00:00 2027 GMT
+    stamp = output.strip().split("=", 1)[1]
+    return datetime.datetime.strptime(stamp, "%b %d %H:%M:%S %Y %Z").replace(
+        tzinfo=datetime.timezone.utc
+    )
+
+
+def check_certificates(paths=None, expiry=read_expiry, now=None):
+    """Report certificates that expire soon or have already expired."""
+    if paths is None:
+        paths = sorted(glob.glob(LETSENCRYPT_GLOB))
+    if not paths:
+        return Result("Certificates", OK, "No certificates found to check")
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    soonest = None
+    for path in paths:
+        expires = expiry(path)
+        if soonest is None or expires < soonest[1]:
+            soonest = (path, expires)
+    path, expires = soonest
+    days = (expires - now).days
+    if days < 0:
+        message = f"{path} has already expired"
+        return Result("Certificates", FAIL, message, fix="sudo certbot renew")
+    message = f"{path} expires in {days} days"
+    fix = "sudo certbot renew"
+    if days < CERT_FAIL_DAYS:
+        return Result("Certificates", FAIL, message, fix=fix)
+    if days < CERT_WARN_DAYS:
+        return Result("Certificates", WARN, message, fix=fix)
+    return Result("Certificates", OK, f"Soonest expiry is in {days} days")
+
+
 def render_report(results, today=None):
     """Turn a list of results into the one screen text report."""
     today = today or datetime.date.today()
@@ -201,7 +246,8 @@ def build_parser():
 
 def main(argv=None):
     build_parser().parse_args(argv)
-    results = [check_updates(), check_reboot(), check_services(), check_disk()]
+    results = [check_updates(), check_reboot(), check_services(), check_disk(),
+               check_certificates()]
     print(render_report(results))
     return exit_code(results)
 

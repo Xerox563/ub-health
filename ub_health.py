@@ -33,20 +33,34 @@ def parse_upgradable(text):
     return names
 
 
+def parse_security(text):
+    """Return the names of upgradable packages that come from security updates."""
+    names = []
+    for line in text.splitlines():
+        if "[upgradable" in line and "-security" in line.split("/", 1)[-1]:
+            names.append(line.split("/", 1)[0])
+    return names
+
+
 def check_updates(apt_output=None):
-    """Report how many packages can be upgraded."""
+    """Report how many packages can be upgraded, flagging security updates."""
     if apt_output is None:
         apt_output = subprocess.run(
             ["apt", "list", "--upgradable"],
             capture_output=True, text=True,
         ).stdout
     count = len(parse_upgradable(apt_output))
-    if count == 0:
-        return Result("Updates", OK, "Everything is up to date")
-    return Result(
-        "Updates", WARN, f"{count} packages can be upgraded",
-        fix="sudo apt update && sudo apt upgrade",
-    )
+    security = len(parse_security(apt_output))
+    fix = "sudo apt update && sudo apt upgrade"
+    if security:
+        return Result(
+            "Updates", FAIL,
+            f"{security} security update(s) waiting ({count} packages in total)",
+            fix=fix,
+        )
+    if count:
+        return Result("Updates", WARN, f"{count} packages can be upgraded", fix=fix)
+    return Result("Updates", OK, "Everything is up to date")
 
 
 def render_report(results, today=None):

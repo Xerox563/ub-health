@@ -533,6 +533,46 @@ def run_fixes(results, ask=input, run=subprocess.run):
             print("Skipped.")
 
 
+HISTORY_PATH = os.path.expanduser("~/.local/state/ub-health/history.jsonl")
+
+
+def history_entry(results, now=None):
+    """One short record of a run: when it happened and how many checks were OK."""
+    now = now or datetime.datetime.now()
+    total = len(results)
+    ok_count = sum(1 for r in results if r.status == OK)
+    return {
+        "time": now.isoformat(timespec="seconds"),
+        "health": ok_count * 100 // total if total else 100,
+        "ok": ok_count,
+        "warn": sum(1 for r in results if r.status == WARN),
+        "fail": sum(1 for r in results if r.status == FAIL),
+    }
+
+
+def save_history(results, path=HISTORY_PATH, now=None):
+    """Append this run to the history file. Creates the folder if needed."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a") as handle:
+        handle.write(json.dumps(history_entry(results, now)) + "\n")
+
+
+def load_history(path=HISTORY_PATH, limit=20):
+    """Return the last `limit` runs. Damaged lines are skipped, never fatal."""
+    try:
+        with open(path) as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return []
+    entries = []
+    for line in lines:
+        try:
+            entries.append(json.loads(line))
+        except ValueError:
+            continue
+    return entries[-limit:]
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="ub-health",
@@ -557,6 +597,10 @@ def build_parser():
         "--plain", action="store_true",
         help="no colors, for logs and copy and paste",
     )
+    parser.add_argument(
+        "--no-history", action="store_true",
+        help="do not save this run to the history file",
+    )
     return parser
 
 
@@ -576,6 +620,11 @@ def main(argv=None):
         print(render_report(results, color=color))
     if args.fix:
         run_fixes(results)
+    if not args.no_history:
+        try:
+            save_history(results)
+        except OSError:
+            pass  # History is a nice extra. Never let it break the check.
     return exit_code(results)
 
 

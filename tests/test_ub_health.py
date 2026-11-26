@@ -163,6 +163,39 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(uh.check_journal(self.LINES * 20).status, uh.WARN)
 
 
+class HistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, "nested", "history.jsonl")
+        self.results = [uh.Result("A", uh.OK, "x"), uh.Result("B", uh.FAIL, "y")]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_save_creates_folder_and_appends(self):
+        uh.save_history(self.results, self.path, NOW)
+        uh.save_history(self.results, self.path, NOW)
+        self.assertEqual(len(uh.load_history(self.path)), 2)
+
+    def test_entry_contents(self):
+        entry = uh.history_entry(self.results, NOW.replace(tzinfo=None))
+        self.assertEqual((entry["health"], entry["ok"], entry["fail"]), (50, 1, 1))
+
+    def test_damaged_lines_are_skipped(self):
+        uh.save_history(self.results, self.path, NOW)
+        with open(self.path, "a") as handle:
+            handle.write("this is not json\n")
+        self.assertEqual(len(uh.load_history(self.path)), 1)
+
+    def test_limit_keeps_latest(self):
+        for _ in range(5):
+            uh.save_history(self.results, self.path, NOW)
+        self.assertEqual(len(uh.load_history(self.path, limit=3)), 3)
+
+    def test_missing_file_is_empty(self):
+        self.assertEqual(uh.load_history(os.path.join(self.tmp.name, "none")), [])
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

@@ -268,6 +268,37 @@ class QuietTests(unittest.TestCase):
         self.assertEqual(text, "[WARN] B: hmm")
 
 
+class InteractiveTests(unittest.TestCase):
+    RESULTS = [
+        uh.Result("Updates", uh.FAIL, "2 security updates", fix="sudo apt upgrade"),
+        uh.Result("Reboot", uh.OK, "No restart needed"),
+    ]
+
+    def test_arrow_and_letter_keys_move(self):
+        self.assertEqual(uh.move_selection(0, uh.KEY_DOWN, 2), 1)
+        self.assertEqual(uh.move_selection(1, ord("k"), 2), 0)
+
+    def test_selection_stops_at_the_ends(self):
+        self.assertEqual(uh.move_selection(0, uh.KEY_UP, 2), 0)
+        self.assertEqual(uh.move_selection(1, ord("j"), 2), 1)
+
+    def test_other_keys_do_nothing(self):
+        self.assertEqual(uh.move_selection(1, ord("x"), 2), 1)
+
+    def test_empty_list_is_safe(self):
+        self.assertEqual(uh.move_selection(0, uh.KEY_DOWN, 0), 0)
+
+    def test_screen_rows_show_selected_fix_and_help(self):
+        lines = uh.tui_lines(self.RESULTS, 0, 80)
+        self.assertTrue(any("Fix: sudo apt upgrade" in line for line in lines))
+        self.assertTrue(any("quit" in line for line in lines))
+        self.assertTrue(any(line.startswith(" ▶") for line in lines))
+
+    def test_rows_fit_the_width(self):
+        lines = uh.tui_lines(self.RESULTS, 0, 30)
+        self.assertTrue(all(len(line) <= 30 for line in lines))
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

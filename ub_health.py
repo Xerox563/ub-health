@@ -529,6 +529,88 @@ def render_quiet(results):
                      for r in results if r.status != OK)
 
 
+KEY_UP, KEY_DOWN = 259, 258  # curses.KEY_UP and curses.KEY_DOWN
+
+
+def move_selection(index, key, count):
+    """Move the highlighted check up or down. Arrow keys, j and k all work."""
+    if count == 0:
+        return 0
+    if key in (KEY_UP, ord("k")):
+        return max(0, index - 1)
+    if key in (KEY_DOWN, ord("j")):
+        return min(count - 1, index + 1)
+    return index
+
+
+def tui_lines(results, selected, width):
+    """The text rows of the interactive screen, as plain strings (no colors)."""
+    total = len(results)
+    ok_count = sum(1 for r in results if r.status == OK)
+    health = ok_count * 100 // total if total else 100
+    lines = [
+        f"Ubuntu Health Check   Health {health}%   {ok_count} of {total} OK",
+        "",
+    ]
+    for index, result in enumerate(results):
+        pointer = "▶" if index == selected else " "
+        row = f" {pointer} {ICONS[result.status]} {result.name:<13} {result.message}"
+        lines.append(row[:width])
+    lines.append("")
+    if 0 <= selected < total and results[selected].fix and results[selected].status != OK:
+        lines.append(f"Fix: {results[selected].fix}"[:width])
+    lines.append("↑/↓ move   f fix this   r run checks again   q quit")
+    return [line[:width] for line in lines]
+
+
+def run_tui(refresh=False):
+    """Full screen mode in the terminal. Needs a real terminal (not a pipe)."""
+    import curses
+
+    def draw(screen, results, selected, note):
+        screen.erase()
+        height, width = screen.getmaxyx()
+        for y, line in enumerate(tui_lines(results, selected, width - 1)[:height - 2]):
+            attr = curses.A_NORMAL
+            if line.startswith(" ▶"):
+                attr = curses.A_REVERSE
+            try:
+                screen.addnstr(y, 0, line, width - 1, attr)
+            except curses.error:
+                pass
+        if note and height >= 2:
+            try:
+                screen.addnstr(height - 1, 0, note, width - 1, curses.A_BOLD)
+            except curses.error:
+                pass
+        screen.refresh()
+
+    def loop(screen):
+        curses.curs_set(0)
+        results = collect_results(refresh=refresh)
+        selected, note = 0, ""
+        while True:
+            draw(screen, results, selected, note)
+            key = screen.getch()
+            if key in (ord("q"), 27):
+                return
+            selected = move_selection(selected, key, len(results))
+            note = ""
+            if key == ord("r"):
+                results = collect_results()
+                note = "Checks run again."
+            elif key == ord("f") and results:
+                curses.endwin()
+                run_fixes([results[selected]], ask=input)
+                input("Press Enter to return to the screen...")
+                screen.refresh()
+                results = collect_results()
+                note = "Checks run again after the fix."
+
+    curses.wrapper(loop)
+    return 0
+
+
 def exit_code(results):
     """0 when all OK, 1 when there are warnings, 2 when there are failures."""
     statuses = {r.status for r in results}
@@ -675,6 +757,10 @@ def build_parser():
         help="save the results as a Markdown report to FILE",
     )
     parser.add_argument(
+        "--tui", action="store_true",
+        help="open the full screen interactive view",
+    )
+    parser.add_argument(
         "--quiet", action="store_true",
         help="print only the problems, and nothing when all is OK (for scheduled runs)",
     )
@@ -702,6 +788,11 @@ def main(argv=None):
     if not is_ubuntu():
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3
+    if args.tui:
+        if not sys.stdout.isatty():
+            print("--tui needs a real terminal. Run it directly in a terminal window.")
+            return 2
+        return run_tui(refresh=args.refresh)
     results = collect_results(refresh=args.refresh)
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))

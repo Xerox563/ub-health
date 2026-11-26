@@ -129,6 +129,20 @@ class FirewallTests(unittest.TestCase):
         self.assertEqual(uh.check_firewall(text, service_state="inactive").status, uh.WARN)
 
 
+class AutoUpdateTests(unittest.TestCase):
+    ON = 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n'
+    OFF = 'APT::Periodic::Unattended-Upgrade "0";\n'
+
+    def test_enabled_is_ok(self):
+        self.assertEqual(uh.check_auto_updates(self.ON).status, uh.OK)
+
+    def test_disabled_is_warn(self):
+        self.assertEqual(uh.check_auto_updates(self.OFF).status, uh.WARN)
+
+    def test_missing_file_is_warn(self):
+        self.assertEqual(uh.check_auto_updates("").status, uh.WARN)
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

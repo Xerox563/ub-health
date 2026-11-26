@@ -220,6 +220,30 @@ def check_firewall(ufw_text=None, service_state=None):
     return Result("Firewall", WARN, "Could not read firewall status", fix="sudo ub-health")
 
 
+AUTO_UPGRADES_FILE = "/etc/apt/apt.conf.d/20auto-upgrades"
+
+
+def check_auto_updates(config_text=None):
+    """Report whether security updates install themselves automatically."""
+    if config_text is None:
+        try:
+            with open(AUTO_UPGRADES_FILE) as handle:
+                config_text = handle.read()
+        except OSError:
+            config_text = ""
+    enabled = any(
+        line.split() and line.split()[0] == "APT::Periodic::Unattended-Upgrade"
+        and line.split()[-1].strip('";') == "1"
+        for line in config_text.splitlines()
+    )
+    if enabled:
+        return Result("Auto updates", OK, "Security updates install automatically")
+    return Result(
+        "Auto updates", WARN, "Security updates do not install automatically",
+        fix="sudo apt install unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades",
+    )
+
+
 MEM_WARN_FREE_PERCENT = 10
 MEM_FAIL_FREE_PERCENT = 5
 
@@ -502,7 +526,7 @@ def main(argv=None):
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3
     results = [check_updates(refresh=args.refresh), check_reboot(), check_services(),
-               check_disk(), check_memory(), check_firewall(),
+               check_disk(), check_memory(), check_firewall(), check_auto_updates(),
                check_certificates()]
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))

@@ -220,6 +220,46 @@ def check_firewall(ufw_text=None, service_state=None):
     return Result("Firewall", WARN, "Could not read firewall status", fix="sudo ub-health")
 
 
+JOURNAL_WARN_COUNT = 50
+
+
+def parse_journal_errors(text):
+    """Return (count, noisiest program) from `journalctl -p err` lines."""
+    programs = {}
+    count = 0
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        count += 1
+        program = parts[4].split("[", 1)[0].rstrip(":")
+        programs[program] = programs.get(program, 0) + 1
+    top = max(programs, key=programs.get) if programs else ""
+    return count, top
+
+
+def check_journal(text=None):
+    """Count error messages from the last 24 hours in the system log."""
+    if text is None:
+        proc = subprocess.run(
+            ["journalctl", "-p", "err", "--since", "24 hours ago", "--no-pager", "-q"],
+            capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            return Result("System log", WARN, "Could not read the system log (run with sudo)",
+                          fix="sudo ub-health")
+        text = proc.stdout
+    count, top = parse_journal_errors(text)
+    if count == 0:
+        return Result("System log", OK, "No error messages in the last 24 hours")
+    message = f"{count} error messages in the last 24 hours"
+    if top:
+        message += f" (most from {top})"
+    if count >= JOURNAL_WARN_COUNT:
+        return Result("System log", WARN, message)
+    return Result("System log", OK, message)
+
+
 AUTO_UPGRADES_FILE = "/etc/apt/apt.conf.d/20auto-upgrades"
 
 
@@ -527,7 +567,7 @@ def main(argv=None):
         return 3
     results = [check_updates(refresh=args.refresh), check_reboot(), check_services(),
                check_disk(), check_memory(), check_firewall(), check_auto_updates(),
-               check_certificates()]
+               check_journal(), check_certificates()]
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))
     else:

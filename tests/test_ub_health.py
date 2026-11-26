@@ -143,6 +143,26 @@ class AutoUpdateTests(unittest.TestCase):
         self.assertEqual(uh.check_auto_updates("").status, uh.WARN)
 
 
+class JournalTests(unittest.TestCase):
+    LINES = (
+        "Nov 25 10:00:00 host cups[123]: printer offline\n"
+        "Nov 25 10:01:00 host cups[123]: printer offline\n"
+        "Nov 25 10:02:00 host snapd[9]: failed to refresh\n"
+    )
+
+    def test_counts_and_names_noisiest_program(self):
+        self.assertEqual(uh.parse_journal_errors(self.LINES), (3, "cups"))
+
+    def test_no_errors_is_ok(self):
+        self.assertEqual(uh.check_journal("").status, uh.OK)
+
+    def test_few_errors_is_ok(self):
+        self.assertEqual(uh.check_journal(self.LINES).status, uh.OK)
+
+    def test_many_errors_is_warn(self):
+        self.assertEqual(uh.check_journal(self.LINES * 20).status, uh.WARN)
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

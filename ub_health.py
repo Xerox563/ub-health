@@ -415,7 +415,19 @@ def level_code(percent):
     return "32"
 
 
-def render_report(results, today=None, color=False):
+SPARK_CHARS = "▁▂▃▄▅▆▇█"
+
+
+def sparkline(values):
+    """Tiny chart: one character per value, from low (▁) to high (█). Values are 0 to 100."""
+    chars = []
+    for value in values:
+        value = max(0, min(100, value))
+        chars.append(SPARK_CHARS[round(value / 100 * (len(SPARK_CHARS) - 1))])
+    return "".join(chars)
+
+
+def render_report(results, today=None, color=False, history=None):
     """Build the one screen dashboard: a header, a health bar and a status card per check."""
     today = today or datetime.date.today()
     inner = WIDTH - 2
@@ -434,6 +446,9 @@ def render_report(results, today=None, color=False):
     health_code = "32" if health >= 80 else "33" if health >= 50 else "31"
     lines.append(f"  Health  {bar(health, 30, health_code, color)}  {health}%")
     lines.append(paint(f"          {ok_count} of {total} checks are OK", "2", enabled=color))
+    if history and len(history) >= 2:
+        trend = sparkline([entry.get("health", 0) for entry in history])
+        lines.append(f"  Trend   {trend}  last {len(history)} runs")
     lines.append("")
 
     for result in results:
@@ -614,10 +629,6 @@ def main(argv=None):
                check_journal(), check_certificates()]
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))
-    else:
-        # Colors only when printing to a real terminal, and never when NO_COLOR is set.
-        color = sys.stdout.isatty() and not args.plain and "NO_COLOR" not in os.environ
-        print(render_report(results, color=color))
     if args.fix:
         run_fixes(results)
     if not args.no_history:
@@ -625,6 +636,10 @@ def main(argv=None):
             save_history(results)
         except OSError:
             pass  # History is a nice extra. Never let it break the check.
+    if not args.json:
+        history = load_history()
+        color = sys.stdout.isatty() and not args.plain and "NO_COLOR" not in os.environ
+        print(render_report(results, color=color, history=history))
     return exit_code(results)
 
 

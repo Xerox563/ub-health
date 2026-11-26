@@ -196,6 +196,21 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(uh.load_history(os.path.join(self.tmp.name, "none")), [])
 
 
+class TrendTests(unittest.TestCase):
+    def test_sparkline_low_and_high(self):
+        self.assertEqual(uh.sparkline([0, 100]), "▁█")
+
+    def test_sparkline_length_matches_values(self):
+        self.assertEqual(len(uh.sparkline([10, 50, 90])), 3)
+
+    def test_trend_shown_only_with_two_runs(self):
+        one = uh.render_report([uh.Result("A", uh.OK, "x")], history=[{"health": 50}])
+        two = uh.render_report([uh.Result("A", uh.OK, "x")],
+                               history=[{"health": 50}, {"health": 100}])
+        self.assertNotIn("Trend", one)
+        self.assertIn("Trend", two)
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

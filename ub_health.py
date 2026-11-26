@@ -523,6 +523,12 @@ def render_markdown(results, today=None):
     return "\n".join(lines)
 
 
+def render_quiet(results):
+    """One line per problem, and nothing at all when everything is OK (for scheduled runs)."""
+    return "\n".join(f"[{r.status}] {r.name}: {r.message}"
+                     for r in results if r.status != OK)
+
+
 def exit_code(results):
     """0 when all OK, 1 when there are warnings, 2 when there are failures."""
     statuses = {r.status for r in results}
@@ -668,6 +674,10 @@ def build_parser():
         "--report", metavar="FILE",
         help="save the results as a Markdown report to FILE",
     )
+    parser.add_argument(
+        "--quiet", action="store_true",
+        help="print only the problems, and nothing when all is OK (for scheduled runs)",
+    )
     return parser
 
 
@@ -693,7 +703,11 @@ def main(argv=None):
             save_history(results)
         except OSError:
             pass  # History is a nice extra. Never let it break the check.
-    if not args.json:
+    if args.quiet:
+        problems = render_quiet(results)
+        if problems:
+            print(problems)
+    elif not args.json:
         history = load_history()
         color = sys.stdout.isatty() and not args.plain and "NO_COLOR" not in os.environ
         print(render_report(results, color=color, history=history))

@@ -258,6 +258,16 @@ class MarkdownTests(unittest.TestCase):
         self.assertNotIn("Suggested fixes", text)
 
 
+class QuietTests(unittest.TestCase):
+    def test_all_ok_prints_nothing(self):
+        self.assertEqual(uh.render_quiet([uh.Result("A", uh.OK, "fine")]), "")
+
+    def test_only_problems_are_printed(self):
+        text = uh.render_quiet([uh.Result("A", uh.OK, "fine"),
+                                uh.Result("B", uh.WARN, "hmm")])
+        self.assertEqual(text, "[WARN] B: hmm")
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

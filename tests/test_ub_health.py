@@ -90,6 +90,27 @@ class DiskTests(unittest.TestCase):
         self.assertEqual(result.status, uh.OK)
 
 
+class MemoryTests(unittest.TestCase):
+    PLENTY = ("MemTotal:       16000000 kB\nMemAvailable:    8000000 kB\n"
+              "SwapTotal:       2000000 kB\nSwapFree:        2000000 kB\n")
+    TIGHT = "MemTotal:       16000000 kB\nMemAvailable:     400000 kB\n"
+
+    def test_parses_values_in_kb(self):
+        self.assertEqual(uh.parse_meminfo(self.PLENTY)["MemTotal"], 16000000)
+
+    def test_plenty_of_memory_is_ok(self):
+        self.assertEqual(uh.check_memory(self.PLENTY).status, uh.OK)
+
+    def test_very_little_free_is_fail(self):
+        self.assertEqual(uh.check_memory(self.TIGHT).status, uh.FAIL)
+
+    def test_swap_is_charted_only_when_present(self):
+        with_swap = uh.check_memory(self.PLENTY)
+        without = uh.check_memory(self.TIGHT)
+        self.assertEqual([d[0] for d in with_swap.details], ["Memory used", "Swap used"])
+        self.assertEqual([d[0] for d in without.details], ["Memory used"])
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

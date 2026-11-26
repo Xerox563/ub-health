@@ -195,6 +195,57 @@ def check_disk(mounts_text=None, usage=shutil.disk_usage):
     return Result("Disk", OK, message, details=details)
 
 
+MEM_WARN_FREE_PERCENT = 10
+MEM_FAIL_FREE_PERCENT = 5
+
+
+def parse_meminfo(text):
+    """Turn /proc/meminfo text into {"MemTotal": kB, ...}."""
+    values = {}
+    for line in text.splitlines():
+        if ":" not in line:
+            continue
+        key, rest = line.split(":", 1)
+        fields = rest.split()
+        if fields and fields[0].isdigit():
+            values[key.strip()] = int(fields[0])
+    return values
+
+
+def check_memory(meminfo_text=None):
+    """Report how much memory and swap are in use."""
+    if meminfo_text is None:
+        try:
+            with open("/proc/meminfo") as handle:
+                meminfo_text = handle.read()
+        except OSError:
+            return Result("Memory", WARN, "Could not read memory information")
+    info = parse_meminfo(meminfo_text)
+    total = info.get("MemTotal", 0)
+    available = info.get("MemAvailable")
+    if not total or available is None:
+        return Result("Memory", WARN, "Could not read memory information")
+    free_percent = available * 100 // total
+    used_gb = (total - available) / 1_000_000
+    total_gb = total / 1_000_000
+    details = [("Memory used", 100 - free_percent,
+                f"{used_gb:.1f} of {total_gb:.1f} GB")]
+    swap_total = info.get("SwapTotal", 0)
+    if swap_total:
+        swap_free = info.get("SwapFree", 0)
+        swap_used = swap_total - swap_free
+        details.append(("Swap used", swap_used * 100 // swap_total,
+                        f"{swap_used / 1_000_000:.1f} of {swap_total / 1_000_000:.1f} GB"))
+    message = f"{free_percent}% of memory is free"
+    if free_percent < MEM_FAIL_FREE_PERCENT:
+        status = FAIL
+    elif free_percent < MEM_WARN_FREE_PERCENT:
+        status = WARN
+    else:
+        status = OK
+    return Result("Memory", status, message, details=details)
+
+
 LETSENCRYPT_GLOB = "/etc/letsencrypt/live/*/cert.pem"
 CERT_WARN_DAYS = 30
 CERT_FAIL_DAYS = 7
@@ -426,7 +477,7 @@ def main(argv=None):
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3
     results = [check_updates(refresh=args.refresh), check_reboot(), check_services(),
-               check_disk(),
+               check_disk(), check_memory(),
                check_certificates()]
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))

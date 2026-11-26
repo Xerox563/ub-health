@@ -681,15 +681,28 @@ def build_parser():
     return parser
 
 
+def collect_results(refresh=False):
+    """Run every check, in the order they appear on the dashboard."""
+    return [
+        check_updates(refresh=refresh),
+        check_reboot(),
+        check_services(),
+        check_disk(),
+        check_memory(),
+        check_firewall(),
+        check_auto_updates(),
+        check_journal(),
+        check_certificates(),
+    ]
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     apply_config()
     if not is_ubuntu():
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3
-    results = [check_updates(refresh=args.refresh), check_reboot(), check_services(),
-               check_disk(), check_memory(), check_firewall(), check_auto_updates(),
-               check_journal(), check_certificates()]
+    results = collect_results(refresh=args.refresh)
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))
     if args.report:

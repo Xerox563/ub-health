@@ -211,6 +211,39 @@ class TrendTests(unittest.TestCase):
         self.assertIn("Trend", two)
 
 
+class ConfigFileTests(unittest.TestCase):
+    NAMES = ["DISK_WARN_PERCENT", "DISK_FAIL_PERCENT", "MEM_WARN_FREE_PERCENT",
+             "MEM_FAIL_FREE_PERCENT", "CERT_WARN_DAYS", "CERT_FAIL_DAYS",
+             "JOURNAL_WARN_COUNT"]
+
+    def setUp(self):
+        self.saved = {name: getattr(uh, name) for name in self.NAMES}
+        self.tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        for name, value in self.saved.items():
+            setattr(uh, name, value)
+        self.tmp.cleanup()
+
+    def write(self, text):
+        path = os.path.join(self.tmp.name, "config.ini")
+        with open(path, "w") as handle:
+            handle.write(text)
+        return path
+
+    def test_values_are_read(self):
+        uh.apply_config(self.write("[disk]\nwarn_percent = 70\nfail_percent = 85\n"))
+        self.assertEqual((uh.DISK_WARN_PERCENT, uh.DISK_FAIL_PERCENT), (70, 85))
+
+    def test_bad_value_keeps_default(self):
+        uh.apply_config(self.write("[disk]\nwarn_percent = lots\n"))
+        self.assertEqual(uh.DISK_WARN_PERCENT, self.saved["DISK_WARN_PERCENT"])
+
+    def test_missing_file_keeps_defaults(self):
+        uh.apply_config(os.path.join(self.tmp.name, "missing.ini"))
+        self.assertEqual(uh.CERT_FAIL_DAYS, self.saved["CERT_FAIL_DAYS"])
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

@@ -2,6 +2,7 @@
 """ub-health: a plain English health check for Ubuntu."""
 
 import argparse
+import configparser
 import datetime
 import glob
 import json
@@ -548,6 +549,37 @@ def run_fixes(results, ask=input, run=subprocess.run):
             print("Skipped.")
 
 
+CONFIG_FILE = os.path.expanduser("~/.config/ub-health/config.ini")
+
+
+def _int_setting(parser, section, key, default):
+    """Read a whole number from the config, or keep the default if it is missing or wrong."""
+    try:
+        return parser.getint(section, key)
+    except (configparser.Error, ValueError):
+        return default
+
+
+def apply_config(config_path=CONFIG_FILE):
+    """Load warning and failure limits from the config file. Missing file means defaults."""
+    global DISK_WARN_PERCENT, DISK_FAIL_PERCENT, MEM_WARN_FREE_PERCENT, MEM_FAIL_FREE_PERCENT
+    global CERT_WARN_DAYS, CERT_FAIL_DAYS, JOURNAL_WARN_COUNT
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(config_path)
+    except configparser.Error:
+        return
+    DISK_WARN_PERCENT = _int_setting(parser, "disk", "warn_percent", DISK_WARN_PERCENT)
+    DISK_FAIL_PERCENT = _int_setting(parser, "disk", "fail_percent", DISK_FAIL_PERCENT)
+    MEM_WARN_FREE_PERCENT = _int_setting(parser, "memory", "warn_free_percent",
+                                         MEM_WARN_FREE_PERCENT)
+    MEM_FAIL_FREE_PERCENT = _int_setting(parser, "memory", "fail_free_percent",
+                                         MEM_FAIL_FREE_PERCENT)
+    CERT_WARN_DAYS = _int_setting(parser, "certificates", "warn_days", CERT_WARN_DAYS)
+    CERT_FAIL_DAYS = _int_setting(parser, "certificates", "fail_days", CERT_FAIL_DAYS)
+    JOURNAL_WARN_COUNT = _int_setting(parser, "journal", "warn_count", JOURNAL_WARN_COUNT)
+
+
 HISTORY_PATH = os.path.expanduser("~/.local/state/ub-health/history.jsonl")
 
 
@@ -621,6 +653,7 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    apply_config()
     if not is_ubuntu():
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3

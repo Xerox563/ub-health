@@ -195,6 +195,31 @@ def check_disk(mounts_text=None, usage=shutil.disk_usage):
     return Result("Disk", OK, message, details=details)
 
 
+def check_firewall(ufw_text=None, service_state=None):
+    """Report whether the ufw firewall is on. Falls back to the service state without sudo."""
+    if ufw_text is None:
+        try:
+            proc = subprocess.run(["ufw", "status"], capture_output=True, text=True)
+        except FileNotFoundError:
+            return Result("Firewall", WARN, "The firewall (ufw) is not installed",
+                          fix="sudo apt install ufw")
+        ufw_text = proc.stdout + proc.stderr
+    if "Status: active" in ufw_text:
+        return Result("Firewall", OK, "Firewall is on")
+    if "Status: inactive" in ufw_text:
+        return Result("Firewall", WARN, "Firewall is off", fix="sudo ufw enable")
+    if "need to be root" in ufw_text.lower():
+        if service_state is None:
+            service_state = subprocess.run(
+                ["systemctl", "is-active", "ufw"], capture_output=True, text=True,
+            ).stdout.strip()
+        if service_state == "active":
+            return Result("Firewall", OK, "Firewall service is running (sudo shows the rules)")
+        return Result("Firewall", WARN, "Firewall service is not running",
+                      fix="sudo ufw enable")
+    return Result("Firewall", WARN, "Could not read firewall status", fix="sudo ub-health")
+
+
 MEM_WARN_FREE_PERCENT = 10
 MEM_FAIL_FREE_PERCENT = 5
 
@@ -477,7 +502,7 @@ def main(argv=None):
         print("ub-health only works on Ubuntu. This system does not look like Ubuntu.")
         return 3
     results = [check_updates(refresh=args.refresh), check_reboot(), check_services(),
-               check_disk(), check_memory(),
+               check_disk(), check_memory(), check_firewall(),
                check_certificates()]
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))

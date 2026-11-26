@@ -111,6 +111,24 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual([d[0] for d in without.details], ["Memory used"])
 
 
+class FirewallTests(unittest.TestCase):
+    def test_active_firewall_is_ok(self):
+        self.assertEqual(uh.check_firewall("Status: active\n").status, uh.OK)
+
+    def test_inactive_firewall_is_warn(self):
+        result = uh.check_firewall("Status: inactive\n")
+        self.assertEqual(result.status, uh.WARN)
+        self.assertEqual(result.fix, "sudo ufw enable")
+
+    def test_needs_root_but_service_running_is_ok(self):
+        text = "ERROR: You need to be root to run this script\n"
+        self.assertEqual(uh.check_firewall(text, service_state="active").status, uh.OK)
+
+    def test_needs_root_and_service_stopped_is_warn(self):
+        text = "ERROR: You need to be root to run this script\n"
+        self.assertEqual(uh.check_firewall(text, service_state="inactive").status, uh.WARN)
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

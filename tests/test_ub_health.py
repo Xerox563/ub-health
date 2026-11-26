@@ -244,6 +244,20 @@ class ConfigFileTests(unittest.TestCase):
         self.assertEqual(uh.CERT_FAIL_DAYS, self.saved["CERT_FAIL_DAYS"])
 
 
+class MarkdownTests(unittest.TestCase):
+    def test_table_and_fix_list(self):
+        text = uh.render_markdown([
+            uh.Result("Reboot", uh.OK, "No restart needed"),
+            uh.Result("Updates", uh.FAIL, "2 security updates", fix="sudo apt upgrade"),
+        ], today=NOW.date())
+        self.assertIn("| Reboot | OK | No restart needed |", text)
+        self.assertIn("- **Updates**: `sudo apt upgrade`", text)
+
+    def test_no_fix_section_when_all_ok(self):
+        text = uh.render_markdown([uh.Result("Reboot", uh.OK, "fine")])
+        self.assertNotIn("Suggested fixes", text)
+
+
 class CertificateTests(unittest.TestCase):
     def expiring_in(self, days):
         return lambda path: NOW + datetime.timedelta(days=days)

@@ -507,6 +507,22 @@ def bar(percent, width=30, code="32", color=False):
             + paint("░" * (width - filled), "2", enabled=color))
 
 
+def render_markdown(results, today=None):
+    """A Markdown report: a table of checks, then the fixes for anything that needs attention."""
+    today = today or datetime.date.today()
+    lines = [f"# Ubuntu Health Check, {today:%d %b %Y}", "",
+             "| Check | Status | Details |", "| --- | --- | --- |"]
+    for result in results:
+        lines.append(f"| {result.name} | {result.status} | {result.message} |")
+    fixes = [r for r in results if r.fix and r.status != OK]
+    if fixes:
+        lines += ["", "## Suggested fixes", ""]
+        for result in fixes:
+            lines.append(f"- **{result.name}**: `{result.fix}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def exit_code(results):
     """0 when all OK, 1 when there are warnings, 2 when there are failures."""
     statuses = {r.status for r in results}
@@ -648,6 +664,10 @@ def build_parser():
         "--no-history", action="store_true",
         help="do not save this run to the history file",
     )
+    parser.add_argument(
+        "--report", metavar="FILE",
+        help="save the results as a Markdown report to FILE",
+    )
     return parser
 
 
@@ -662,6 +682,10 @@ def main(argv=None):
                check_journal(), check_certificates()]
     if args.json:
         print(json.dumps([asdict(r) for r in results], indent=2))
+    if args.report:
+        with open(args.report, "w") as handle:
+            handle.write(render_markdown(results))
+        print(f"Saved report to {args.report}")
     if args.fix:
         run_fixes(results)
     if not args.no_history:
